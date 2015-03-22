@@ -1,0 +1,106 @@
+---
+title: "Model of Human Activity Recognition"
+author: "Soparkar A"
+date: "March 22, 2015"
+output: html_document
+---
+
+## Executive Summary
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. Using this data (obtained from http://groupware.les.inf.puc-rio.br/har project), data gathered from accelerometers placed on the belt, forearm, arm, and dumbell of six participants is analyzed here to predict how well they executed the exercisea in terms of the classification in the data.
+
+## Libraries
+
+To start with, here are the libraries which the code uses. 
+
+```{r, message=FALSE, warning=FALSE}
+library(caret)
+library(kernlab)
+library(randomForest)
+library(corrplot)
+library(RCurl)
+library(parallel); 
+library(doParallel);
+```
+
+## Loading and cleaning the data
+
+As seen here, two datasets - one for the training data and the other for test data - are loaded. We clean training dataset here. The same steps are applied later to testing dataset, before we actually use it. Many columns in the dataset contain NA values, which are removed. Columns with names and timestamps are also removed.
+
+```{r}
+# read the data
+trdata <- getURL("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", ssl.verifypeer=0L, followlocation=1L)
+training_data <- read.csv(text=trdata, na.strings= c("NA",""," "))
+tsdata <- getURL("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", ssl.verifypeer=0L, followlocation=1L)
+testing_data <- read.csv(text=tsdata, na.strings= c("NA",""," "))
+
+# remove columns with NAs
+training_data_NAs <- apply(training_data, 2, function(x) {sum(is.na(x))})
+training_data_clean <- training_data[,which(training_data_NAs == 0)]
+
+# remove identifier columns such as names and timestamps
+training_data_clean <- training_data_clean[8:length(training_data_clean)]
+```
+
+After cleanup, we now work with only 53 columns, out of original 160 columns.
+
+## Separation of Trainig set
+
+70% of training set is used for training our model. The rest 30% is set aside for cross-validation.
+
+```{r}
+# split the cleaned testing data into training and cross validation
+inTrain <- createDataPartition(y = training_data_clean$classe, p = 0.7, list = FALSE)
+training <- training_data_clean[inTrain, ]
+cv <- training_data_clean[-inTrain, ]
+```
+
+## Creation of model
+
+Here we use Random Forest model to train the given dataset. This is a good choice because random forests strike a good balance between accuracy and performance. With large number of trees, the generalization erro fro the forest converges. Lower correlation among trees also results in lower error rate. We start with creating a correlation plot to see the strength of relationship among variables. Left end (dark red) shows strongly negative relationships, while right end (dark blue) represents strongly positive relationships.
+
+```{r}
+# plot the correlation matrix
+correlMatrix <- cor(training[, -length(training)])
+corrplot(correlMatrix, order = "FPC", method = "circle", type = "lower", tl.cex = 0.8,  tl.col = rgb(0, 1, 0))
+```
+
+Using 'classe' variable as the outcome and all other variables as the predictors, we create the model. 
+
+```{r}
+# fit the model to predict the classe using everything else as a predictor
+registerDoParallel(clust <- makeForkCluster(detectCores()));
+modelFit <- randomForest(classe ~ ., data = training)
+stopCluster(clust);
+modelFit
+```
+
+As seen here, the model has a tiny out of bag (OOB) error rate of 0.54%. Hence we use this good model to cross-validate the data.
+
+## Cross Validation
+
+```{r}
+# cross-validate the model using the remaining 30% of trainig data
+predictCrossVal <- predict(modelFit, cv)
+confusionMatrix(cv$classe, predictCrossVal)
+```
+
+The model exhibts 99.44% accuracy on cross-validation data. 
+
+## Prediction of Testing set
+
+Now we procede to apply this model to the testing set. We first clean the testing dataset.
+
+```{r}
+# clean the final testing data in the same way
+testing_data_NAs <- apply(testing_data, 2, function(x) {sum(is.na(x))})
+testing_data_clean <- testing_data[,which(testing_data_NAs == 0)]
+testing_data_clean <- testing_data_clean[8:length(testing_data_clean)]
+```
+
+And now we use the model to predict the testing set.
+```{r}
+# predict the classes of the test set
+predictTest <- predict(modelFit, testing_data_clean)
+predictTest
+```
