@@ -44,3 +44,4 @@ testing_data_clean <- testing_data_clean[8:length(testing_data_clean)]
 
 # predict the classes of the test set
 predictTest <- predict(modelFit, testing_data_clean)
+predictTest

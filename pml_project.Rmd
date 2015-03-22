@@ -85,7 +85,7 @@ predictCrossVal <- predict(modelFit, cv)
 confusionMatrix(cv$classe, predictCrossVal)
 ```
 
-The model exhibts 99.44% accuracy on cross-validation data. 
+The model exhibts 99.44% accuracy on cross-validation data. Hence the out of sampel error rate would be 0.56% ( = 1 - accuracy).
 
 ## Prediction of Testing set
 
